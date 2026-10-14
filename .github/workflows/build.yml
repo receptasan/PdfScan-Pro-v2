@@ -1,4 +1,4 @@
-name: Android APK Build (PDFScan Pro v2.0)
+name: Android APK Build (PDFScan Pro v2.1)
 
 on:
   push:
@@ -43,6 +43,6 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk releases/PDFScan-Pro-v2.0.apk
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add releases/PDFScan-Pro-v2.0.apk
-          git commit -m "Auto-publish compiled APK" || exit 0
+          git add -f releases/PDFScan-Pro-v2.0.apk
+          git commit -m "Auto-publish compiled APK v2.1" || exit 0
           git push
