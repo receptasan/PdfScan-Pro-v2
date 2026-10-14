@@ -74,7 +74,7 @@ object GridOps {
         return resultCells
     }
 
-    fun groupIntoMultiline(elements: List<TextLine>, lineOverlapThreshold: Float = 0.5f): List<TextLine> {
+    fun groupIntoMultiline(elements: List<TextLine>, lineOverlapThreshold: Float = 0.45f): List<TextLine> {
         if (elements.isEmpty()) return emptyList()
         val sortedByY = elements.sortedBy { it.boundingBox.centerY() }
         val groupedLines = mutableListOf<MutableList<TextLine>>()
@@ -96,7 +96,7 @@ object GridOps {
             val combinedText = group.joinToString(" ") { it.text }
             val unionRect = Rect(group.first().boundingBox)
             group.forEach { unionRect.union(it.boundingBox) }
-            val boldMajority = group.count { it.isBold } > (group.size / 2)
+            val boldMajority = group.count { it.isBold } >= ((group.size + 1) / 2)
             val avgColor = group.first().textColor
             TextLine(text = combinedText, boundingBox = unionRect, isBold = boldMajority, textColor = avgColor)
         }
