@@ -6,16 +6,17 @@ import java.io.File
 object Exporter {
     fun exportToHtmlTable(grid: TableGrid, outputFile: File): File {
         val sb = StringBuilder()
-        sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'></head><body>")
-        val borderAttr = if (grid.isBorderless) "0" else "1"
-        sb.append("<table border='$borderAttr' style='border-collapse: collapse; font-family: sans-serif;'>")
+        sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'><style>body{font-family:sans-serif;padding:16px;} table{border-collapse:collapse;width:100%;} td{padding:8px;vertical-align:top;}</style></head><body>")
+        sb.append("<h3>PDFScan Pro v2.1 - Çıkarılan Tablo (${if (grid.isBorderless) "Çizgisiz Mod" else "Çizgili/Birleşik Hücre Modu"})</h3>")
+        val borderStyle = if (grid.isBorderless) "border-bottom:1px solid #ddd;" else "border:1px solid #444;"
+        sb.append("<table>")
         val cellsByRow = grid.cells.groupBy { it.row }
         for (r in 0 until grid.rowCount) {
             sb.append("<tr>")
             val rowCells = cellsByRow[r]?.sortedBy { it.col } ?: emptyList()
             for (cell in rowCells) {
                 val bgHex = colorToHex(cell.bgColor)
-                sb.append("<td rowspan='${cell.rowSpan}' colspan='${cell.colSpan}' style='background-color:$bgHex; padding:6px; vertical-align:top;'>")
+                sb.append("<td rowspan='${cell.rowSpan}' colspan='${cell.colSpan}' style='background-color:$bgHex; $borderStyle'>")
                 cell.lines.forEachIndexed { index, line ->
                     val textHex = colorToHex(line.textColor)
                     val openBold = if (line.isBold) "<b>" else ""
