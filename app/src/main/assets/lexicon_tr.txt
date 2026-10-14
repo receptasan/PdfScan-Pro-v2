@@ -19,3 +19,15 @@ kartı
 banka
 hesap
 müşteri
+kurumsal
+özeti
+birleşik
+başlık
+yazılım
+geliştirme
+bakım
+hizmeti
+sunucu
+barındırma
+adet
+kalem
