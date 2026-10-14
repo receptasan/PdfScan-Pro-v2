@@ -16,6 +16,7 @@ class PdfScanWorker(appContext: Context, params: WorkerParameters) : CoroutineWo
         const val KEY_INPUT_PATH = "input_image_path"
         const val KEY_OUTPUT_PDF = "output_pdf_path"
         const val KEY_OUTPUT_HTML = "output_html_path"
+        const val KEY_SUMMARY = "output_summary"
         const val KEY_PROGRESS = "progress"
         const val KEY_STATUS = "status"
         private const val CHANNEL_ID = "pdfscan_worker_channel"
@@ -24,15 +25,16 @@ class PdfScanWorker(appContext: Context, params: WorkerParameters) : CoroutineWo
     override suspend fun doWork(): Result {
         val inputPath = inputData.getString(KEY_INPUT_PATH) ?: return Result.failure()
         createNotificationChannel()
-        setForeground(createForegroundInfo(0, "Belge tarama başlatılıyor..."))
+        try { setForeground(createForegroundInfo(0, "Belge tarama başlatılıyor...")) } catch (_: Exception) {}
         return try {
             val result = Pipeline.processDocument(applicationContext, inputPath) { percent, message ->
                 setProgress(workDataOf(KEY_PROGRESS to percent, KEY_STATUS to message))
-                setForeground(createForegroundInfo(percent, message))
+                try { setForeground(createForegroundInfo(percent, message)) } catch (_: Exception) {}
             }
             Result.success(workDataOf(
                 KEY_OUTPUT_PDF to result.pdfFile.absolutePath,
                 KEY_OUTPUT_HTML to result.htmlFile.absolutePath,
+                KEY_SUMMARY to result.summaryText,
                 KEY_STATUS to "Tamamlandı (${result.grid.cells.size} hücre çıkarıldı)"
             ))
         } catch (e: Exception) {
@@ -41,7 +43,7 @@ class PdfScanWorker(appContext: Context, params: WorkerParameters) : CoroutineWo
     }
     private fun createForegroundInfo(progress: Int, message: String): ForegroundInfo {
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-            .setContentTitle("PDFScan Arka Plan İşlemi")
+            .setContentTitle("PDFScan Pro Belge İşleme")
             .setContentText(message)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setOngoing(true)
