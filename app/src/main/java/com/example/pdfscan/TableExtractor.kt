@@ -27,7 +27,9 @@ object TableExtractor {
 
         val enrichedCells = rawCells.map { cell ->
             val cellOcrLines = ocrBlocks.filter { block ->
-                Rect.intersects(cell.boundingBox, block.boundingBox)
+                val cx = block.boundingBox.centerX()
+                val cy = block.boundingBox.centerY()
+                cell.boundingBox.contains(cx, cy) || Rect.intersects(cell.boundingBox, block.boundingBox)
             }.map { block ->
                 val (isBold, textColor) = analyzeTextStyleAndColor(bitmap, block.boundingBox)
                 block.copy(isBold = isBold, textColor = textColor)
@@ -43,17 +45,19 @@ object TableExtractor {
     }
 
     private fun detectBorderlessTable(width: Int, height: Int, blocks: List<TextLine>): List<TableCell> {
-        if (blocks.isEmpty()) return emptyList()
+        if (blocks.isEmpty()) {
+            return listOf(TableCell(0, 0, 1, 1, Rect(0, 0, width, height)))
+        }
         val yHist = IntArray(height)
         for (b in blocks) {
             for (y in b.boundingBox.top.coerceAtLeast(0) until b.boundingBox.bottom.coerceAtMost(height)) yHist[y]++
         }
-        val virtualHLines = findProjectionCuts(yHist, minGapSize = 8)
+        val virtualHLines = findProjectionCuts(yHist, minGapSize = (height * 0.012f).toInt().coerceAtLeast(6))
         val xHist = IntArray(width)
         for (b in blocks) {
             for (x in b.boundingBox.left.coerceAtLeast(0) until b.boundingBox.right.coerceAtMost(width)) xHist[x]++
         }
-        val virtualVLines = findProjectionCuts(xHist, minGapSize = 18)
+        val virtualVLines = findProjectionCuts(xHist, minGapSize = (width * 0.03f).toInt().coerceAtLeast(16))
         val cells = mutableListOf<TableCell>()
         for (r in 0 until virtualHLines.size - 1) {
             for (c in 0 until virtualVLines.size - 1) {
@@ -71,7 +75,11 @@ object TableExtractor {
             if (hist[i] > 0) {
                 if (!inContent) {
                     val gap = i - zeroStart
-                    if (cuts.isEmpty() || gap >= minGapSize) cuts.add((zeroStart + i) / 2)
+                    if (cuts.isEmpty()) {
+                        cuts.add((i - 4).coerceAtLeast(0))
+                    } else if (gap >= minGapSize) {
+                        cuts.add((zeroStart + i) / 2)
+                    }
                     inContent = true
                 }
             } else if (inContent) {
@@ -79,8 +87,8 @@ object TableExtractor {
                 inContent = false
             }
         }
-        cuts.add(hist.size - 1)
-        return if (cuts.size < 2) listOf(0, hist.size - 1) else cuts
+        cuts.add((zeroStart + hist.size) / 2)
+        return if (cuts.size < 2) listOf(0, hist.size - 1) else cuts.distinct().sorted()
     }
 
     fun extractCellBackgroundColor(bitmap: Bitmap, rect: Rect): Int {
@@ -90,10 +98,10 @@ object TableExtractor {
         val bottom = (rect.bottom - 1).coerceIn(0, bitmap.height - 1)
         if (right <= left || bottom <= top) return Color.WHITE
         val rList = mutableListOf<Int>(); val gList = mutableListOf<Int>(); val bList = mutableListOf<Int>()
-        val stepX = ((right - left) / 10).coerceAtLeast(1)
+        val stepX = ((right - left) / 8).coerceAtLeast(1)
         for (x in left..right step stepX) {
-            val pTop = bitmap.getPixel(x, (top + 2).coerceAtMost(bottom))
-            val pBottom = bitmap.getPixel(x, (bottom - 2).coerceAtLeast(top))
+            val pTop = bitmap.getPixel(x, (top + 3).coerceAtMost(bottom))
+            val pBottom = bitmap.getPixel(x, (bottom - 3).coerceAtLeast(top))
             rList.add(Color.red(pTop)); gList.add(Color.green(pTop)); bList.add(Color.blue(pTop))
             rList.add(Color.red(pBottom)); gList.add(Color.green(pBottom)); bList.add(Color.blue(pBottom))
         }
@@ -119,7 +127,7 @@ object TableExtractor {
                 val pixel = bitmap.getPixel(x, y)
                 val r = Color.red(pixel); val g = Color.green(pixel); val b = Color.blue(pixel)
                 val lum = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
-                val isForeground = abs(bgLum - lum) > 45
+                val isForeground = abs(bgLum - lum) > 40
                 if (isForeground) { darkPixelCount++; sumR += r; sumG += g; sumB += b }
                 if (isForeground != prevIsForeground) edgeTransitions++
                 prevIsForeground = isForeground
@@ -128,20 +136,20 @@ object TableExtractor {
         if (darkPixelCount == 0) return Pair(false, Color.BLACK)
         val strokeWidthRatio = darkPixelCount.toFloat() / edgeTransitions.coerceAtLeast(1).toFloat()
         val density = darkPixelCount.toFloat() / (w * h).toFloat()
-        val isBold = strokeWidthRatio > 1.35f && density > 0.24f
+        val isBold = strokeWidthRatio > 1.30f && density > 0.22f
         val avgColor = Color.rgb((sumR / darkPixelCount).toInt().coerceIn(0, 255), (sumG / darkPixelCount).toInt().coerceIn(0, 255), (sumB / darkPixelCount).toInt().coerceIn(0, 255))
         return Pair(isBold, avgColor)
     }
 
     private fun detectHorizontalLines(bitmap: Bitmap): List<Int> {
         val lines = mutableListOf<Int>()
-        val w = bitmap.width; val h = bitmap.height; val threshold = (w * 0.55).toInt()
+        val w = bitmap.width; val h = bitmap.height; val threshold = (w * 0.45).toInt()
         var y = 0
         while (y < h) {
             var darkCount = 0
             for (x in 0 until w step 2) {
                 val p = bitmap.getPixel(x, y)
-                if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 150) darkCount += 2
+                if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 160) darkCount += 2
             }
             if (darkCount >= threshold) { lines.add(y); y += 6 } else y++
         }
@@ -150,13 +158,13 @@ object TableExtractor {
 
     private fun detectVerticalLines(bitmap: Bitmap): List<Int> {
         val lines = mutableListOf<Int>()
-        val w = bitmap.width; val h = bitmap.height; val threshold = (h * 0.45).toInt()
+        val w = bitmap.width; val h = bitmap.height; val threshold = (h * 0.35).toInt()
         var x = 0
         while (x < w) {
             var darkCount = 0
             for (y in 0 until h step 2) {
                 val p = bitmap.getPixel(x, y)
-                if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 150) darkCount += 2
+                if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 160) darkCount += 2
             }
             if (darkCount >= threshold) { lines.add(x); x += 6 } else x++
         }
@@ -169,10 +177,13 @@ object TableExtractor {
         if (end <= start) return false
         var dark = 0
         for (x in start until end) {
-            val p = bitmap.getPixel(x, safeY)
-            if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 165) dark++
+            for (dy in -2..2) {
+                val py = (safeY + dy).coerceIn(0, bitmap.height - 1)
+                val p = bitmap.getPixel(x, py)
+                if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 170) { dark++; break }
+            }
         }
-        return dark.toFloat() / (end - start).toFloat() > 0.5f
+        return dark.toFloat() / (end - start).toFloat() > 0.45f
     }
 
     private fun checkVerticalPixels(bitmap: Bitmap, x: Int, yStart: Int, yEnd: Int): Boolean {
@@ -181,9 +192,12 @@ object TableExtractor {
         if (end <= start) return false
         var dark = 0
         for (y in start until end) {
-            val p = bitmap.getPixel(safeX, y)
-            if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 165) dark++
+            for (dx in -2..2) {
+                val px = (safeX + dx).coerceIn(0, bitmap.width - 1)
+                val p = bitmap.getPixel(px, y)
+                if ((Color.red(p) + Color.green(p) + Color.blue(p)) / 3 < 170) { dark++; break }
+            }
         }
-        return dark.toFloat() / (end - start).toFloat() > 0.5f
+        return dark.toFloat() / (end - start).toFloat() > 0.45f
     }
 }
