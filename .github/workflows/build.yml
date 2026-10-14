@@ -1,0 +1,33 @@
+name: Android APK Build (PDFScan Pro v2.0)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu Cek (Checkout)
+        uses: actions/checkout@v4
+
+      - name: JDK 17 Kurulumu
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Gradle Kurulumu ve Onbellek
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Debug APK Derle (Assemble Debug)
+        run: gradle assembleDebug --stacktrace
+
+      - name: Uretilen APK Dosyasini Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: PdfScan-v2-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
