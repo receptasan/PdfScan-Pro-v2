@@ -21,7 +21,7 @@ class Corrector(private val dictionary: Set<String>) {
                     }
                 }
             } catch (e: Exception) {
-                words.addAll(listOf("fatura", "toplam", "tarih", "miktar", "birim", "fiyat", "tutar", "kdv", "açıklama"))
+                words.addAll(listOf("fatura", "toplam", "tarih", "miktar", "birim", "fiyat", "tutar", "kdv", "açıklama", "ürün", "genel"))
             }
             return Corrector(words)
         }
